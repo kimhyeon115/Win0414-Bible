@@ -2,12 +2,14 @@ import java.awt.EventQueue;
 import java.awt.Font;
 
 import javax.swing.JDialog;
+import javax.swing.AbstractButton;
 import javax.swing.JButton;
 import java.awt.BorderLayout;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
 import javax.swing.ScrollPaneConstants;
+import javax.swing.text.TabableView;
 
 import java.awt.event.ActionListener;
 import java.io.BufferedReader;
@@ -30,6 +32,7 @@ import javax.swing.JComboBox;
 import javax.swing.JTextField;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
+import javax.swing.JTextPane;
 
 public class winBible extends JDialog {
 	
@@ -38,9 +41,9 @@ public class winBible extends JDialog {
 	private JComboBox cbbook;
 	private JComboBox cbchapter;
 	private JComboBox cbverse;
-	private JTextArea tacontents;
 	private JTextField tfsearchword;
 	private JTextField tffound;
+	private JTextPane tacontents;
 	
 	
 	
@@ -66,7 +69,7 @@ public class winBible extends JDialog {
 	 */
 	public winBible() throws IOException {
 		setTitle("성경 프로젝트");
-		setBounds(100, 100, 740, 444);
+		setBounds(100, 100, 791, 444);
 		
 		JPanel panel = new JPanel();
 		getContentPane().add(panel, BorderLayout.NORTH);
@@ -250,15 +253,23 @@ public class winBible extends JDialog {
 					Connection con = DriverManager.getConnection("jdbc:mysql://localhost:3306/sqlDB","root","1234");						
 					Statement stmt = con.createStatement();
 					
-					String sql = "select verse, contents from bibleTBL where book='" + sBook + "' and chapter=" + sChapter;
+					String sql = "select * from bibleTBL where book='" + sBook + "' and chapter=" + sChapter;
 //					sql = sql + " and verse=" + sVerse;
 							
-					ResultSet rs = stmt.executeQuery(sql);
-					String temp ="";
+					ResultSet rs = stmt.executeQuery(sql);	
+					String temp = "<span style='font: bold 2em Nanum Godic; color:green;'>";
+					temp = temp + "[" + sBook + " " + sChapter + ":" + sVerse + "]" + "<br>";
 					while(rs.next()) {
-						temp = temp + "\n" + rs.getString("verse") + "   " + rs.getString("contents") + "\n";
+						if(sVerse.equals(rs.getString("verse"))) {
+							temp = temp + "<span style='font: bold 1em Nanum Godic; color:red;'>";
+						}else {
+							temp = temp + "<span style='font: bold 1em Nanum Godic; color:black;'>";
+						}
+						temp = temp + rs.getString("verse") + "절) " + rs.getString("contents");
+						temp = temp + "</span><br>";
 					}
-					tacontents.setText(temp);
+					tacontents.setText("<html><body>" + temp + "</body></html>");
+					tacontents.setCaretPosition(0);
 				} catch (ClassNotFoundException | SQLException e1) {
 					e1.printStackTrace();
 				}				
@@ -271,9 +282,7 @@ public class winBible extends JDialog {
 			@Override
 			public void keyPressed(KeyEvent e) {
 				if(e.getKeyCode() == KeyEvent.VK_ENTER) {
-					foundsearch();
-						
-					
+					foundsearch();					
 				}
 			}
 
@@ -296,20 +305,88 @@ public class winBible extends JDialog {
 			public void keyPressed(KeyEvent e) {
 				if(e.getKeyCode() == KeyEvent.VK_ENTER) {
 					String text = tffound.getText();
-					int idxspace = text.indexOf(' ');
-					int idxcolon = text.indexOf(':');
-					String nbook = text.substring(0, idxspace).trim();
-					String nchapter = text.substring(idxspace+1, idxcolon).trim();
-					String nverse = text.substring(idxcolon+1).trim(); // trim(); 공백은 배제함
+					String arrText[] = text.split(" |-|:");
+					String nbook = "";
+					String nchapter = "";
+					String nstart = "";
+					String nend = "";
 					
-					nbook = abbr2full(nbook);
-					try {
-						foundsearch2(nbook,nchapter,nverse);
-					} catch (ClassNotFoundException e1) {
-						e1.printStackTrace();
-					} catch (SQLException e1) {
-						e1.printStackTrace();
+//					int idxspace = text.indexOf(' ');
+//					int idxcolon = text.indexOf(':');
+//					String nbook = text.substring(0, idxspace).trim();
+//					String nchapter = text.substring(idxspace+1, idxcolon).trim();
+//					String nverse = text.substring(idxcolon+1).trim(); // trim(); 공백은 배제함
+					if(arrText.length == 2) {
+						nbook = arrText[0];
+						nchapter = arrText[1];
+						nbook = abbr2full(nbook);
+						
+						try {
+							foundsearch1(nbook,nchapter);
+						} catch (Exception e1) {
+							e1.printStackTrace();
+						}
+					}else if(arrText.length == 3) {
+						nbook = arrText[0];
+						nchapter = arrText[1];
+						nstart = arrText[2];
+						nbook = abbr2full(nbook);
+						
+						try {
+							foundsearch2(nbook,nchapter,nstart);
+						} catch (ClassNotFoundException e1) {
+							e1.printStackTrace();
+						} catch (SQLException e1) {
+							e1.printStackTrace();
+						}
+					}else {
+						nbook = arrText[0];
+						nchapter = arrText[1];
+						nstart = arrText[2];
+						nend = arrText[3];
+						nbook = abbr2full(nbook);
+						try {
+							foundsearch3(nbook, nchapter, nstart, nend);
+						} catch (Exception e1) {
+							e1.printStackTrace();
+						}
 					}
+					cbbook.setSelectedItem(nbook);
+					cbchapter.setSelectedItem(nchapter);
+					cbverse.setSelectedItem(nstart);
+				}
+			}
+
+			private void foundsearch3(String nbook, String nchapter, String nstart, String nend) {
+				
+				try {
+					Class.forName("com.mysql.cj.jdbc.Driver");
+					Connection con = DriverManager.getConnection("jdbc:mysql://localhost:3306/sqlDB","root","1234");
+					Statement stmt = con.createStatement();
+					String sql = "select * from bibleTBL where book='" + nbook + "' and chapter=" + nchapter ;
+					sql = sql + " and verse >=" + nstart +" and verse <=" + nend;
+					ResultSet rs = stmt.executeQuery(sql);
+					String temp="";
+					if(rs.next()) {
+						while(rs.next()) {
+							temp = temp + "<span style='font: bold 1em Nanum Godic; color:blue;'>";
+							temp = temp + "[" + rs.getString("book") + " ";
+							if(rs.getString("book").equals("시편")) {
+								temp = temp + rs.getString("chapter") + "편";
+							}else {
+								temp = temp + rs.getString("chapter") + "장";
+							}						
+							temp = temp + " " + rs.getString("verse") + "절] </span>";
+							temp = temp + "<span style='font: bold 1em Nanum Godic; color:black;'>";
+							temp = temp + rs.getString("contents") + "</span><br>";
+						}
+						tacontents.setText(temp);
+						tacontents.setCaretPosition(0);
+					}else {
+						tacontents.setText("<html><body>" + "검색하신 단어가 포함된 내용이 없습니다." + "</body></html>");
+					}
+				} catch (ClassNotFoundException | SQLException e1) {
+					e1.printStackTrace();
 				}
 			}
 		});
@@ -320,9 +397,9 @@ public class winBible extends JDialog {
 		scrollPane.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
 		getContentPane().add(scrollPane, BorderLayout.CENTER);
 		
-		tacontents = new JTextArea();
-		tacontents.setFont(new Font("나눔고딕", Font.BOLD, 20));
-		tacontents.setLineWrap(true);
+		tacontents = new JTextPane();
+		tacontents.setEditable(false);
+		tacontents.setContentType("text/html");
 		scrollPane.setViewportView(tacontents);
 		
 		// cbBook에 66권의 책이름을 추가하시오.(full 배열)
@@ -337,31 +414,69 @@ public class winBible extends JDialog {
 		}
 	}
 
-	protected void foundsearch2(String nbook, String nchapter, String nverse) throws ClassNotFoundException, SQLException {
-		tacontents.setText("");				
+	protected void foundsearch1(String nbook, String nchapter) {
+		
 		try {
 			Class.forName("com.mysql.cj.jdbc.Driver");
-			Connection con = DriverManager.getConnection("jdbc:mysql://localhost:3306/sqlDB","root","1234");						
+			Connection con = DriverManager.getConnection("jdbc:mysql://localhost:3306/sqlDB","root","1234");
 			Statement stmt = con.createStatement();
-			
-			String sql = "SELECT * from bibleTBL WHERE book=? , chapter=?, verse=?";
+			String sql = "select * from bibleTBL where book='" + nbook + "' and chapter=" + nchapter;
 			ResultSet rs = stmt.executeQuery(sql);
 			String temp="";
 			if(rs.next()) {
 				while(rs.next()) {
-					temp = temp + "[" + rs.getString("book") + " " + rs.getString("chapter") + "장";
-					temp = temp + " " + rs.getString("verse") + "절] " + rs.getString("contents");
+					temp = temp + "<span style='font: bold 1em Nanum Godic; color:blue;'>";
+					temp = temp + "[" + rs.getString("book") + " ";
+					if(rs.getString("book").equals("시편")) {
+						temp = temp + rs.getString("chapter") + "편";
+					}else {
+						temp = temp + rs.getString("chapter") + "장";
+					}						
+					temp = temp + " " + rs.getString("verse") + "절] </span>";
+					temp = temp + "<span style='font: bold 1em Nanum Godic; color:black;'>";
+					temp = temp + rs.getString("contents") + "</span><br>";
 				}
 				tacontents.setText(temp);
+				tacontents.setCaretPosition(0);
 			}else {
-				tacontents.setText("검색하신 단어가 포함된 내용이 없습니다.");
+				tacontents.setText("<html><body>" + "검색하신 단어가 포함된 내용이 없습니다." + "</body></html>");
+			}
+		} catch (ClassNotFoundException | SQLException e1) {
+			e1.printStackTrace();
+		}		
+	}
+
+	private void foundsearch2(String nbook, String nchapter, String nstart) throws ClassNotFoundException, SQLException {
+		tacontents.setText("");				
+		try {
+			Class.forName("com.mysql.cj.jdbc.Driver");
+			Connection con = DriverManager.getConnection("jdbc:mysql://localhost:3306/sqlDB","root","1234");
+			Statement stmt = con.createStatement();
+			String sql = "SELECT * from bibleTBL WHERE book='" + nbook + "' and chapter=" + nchapter + " and verse=" + nstart;
+			ResultSet rs = stmt.executeQuery(sql);
+			String temp="";
+			if(rs.next()) {
+				temp = temp + "<span style='font: bold 1em Nanum Godic; color:blue;'>";
+				temp = temp + "[" + rs.getString("book") + " ";
+				if(rs.getString("book").equals("시편")) {
+					temp = temp + rs.getString("chapter") + "편";
+				}else {
+					temp = temp + rs.getString("chapter") + "장";
+				}
+				temp = temp + " " + rs.getString("verse") + "절] </span>";
+				temp = temp + "<span style='font: bold 1em Nanum Godic; color:black;'>";
+				temp = temp + rs.getString("contents") + "</span><br>";	
+				tacontents.setText(temp);
+				tacontents.setCaretPosition(0);
+			}else {
+				tacontents.setText("<html><body>" + "검색하신 단어가 포함된 내용이 없습니다." + "</body></html>");
 			}
 		} catch (ClassNotFoundException | SQLException e1) {
 			e1.printStackTrace();
 		}
 	}
 
-	protected String abbr2full(String nbook) {
+	private String abbr2full(String nbook) {
 		for(int i=0; i<abbr.length; i++) {
 			if(nbook.equals(abbr[i])) {
 				nbook = full[i];
@@ -394,13 +509,34 @@ public class winBible extends JDialog {
 			ResultSet rs = stmt.executeQuery(sql);
 			String temp="";
 			int count=0;
+			
 			if(rs.next()) {
 				while(rs.next()) {
-					temp = temp + "[" + rs.getString("book") + " " + rs.getString("chapter") + "장";
-					temp = temp + " " + rs.getString("verse") + "절] " + rs.getString("contents") + "\n\n";
+					temp = temp + "<span style='font: bold 1em Nanum Godic; color:red;'>";
+					temp = temp + "[" + rs.getString("book") + " ";
+					if(rs.getString("book").equals("시편")) {
+						temp = temp + rs.getString("chapter") + "편";
+					}else {
+						temp = temp + rs.getString("chapter") + "장";
+					}
+					temp = temp + " " + rs.getString("verse") + "절]</span><br>";
+					
+					String scontent = rs.getString("contents");
+					
+					String ArrContents[] = scontent.split(search);
+					for(int i=0; i<ArrContents.length; i++) {						
+							temp = temp + "<span style='font: bold 1em  Nanum Godic; color:black;'>";
+							temp = temp + ArrContents[i] + "</span>";
+							if(i<ArrContents.length-1) {
+								temp = temp + "<span style='font: bold 1em Nanum Godic; color:blue;'>";
+								temp = temp + search + "</span>";
+							}
+					}
+					temp = temp + "<br>";					
 					count++;
 				}
-				tacontents.setText(temp);
+				tacontents.setText("<html><body>" + temp + "</body></html>");
+				tacontents.setCaretPosition(0);
 				setTitle(count + "회");
 			}else {
 				tacontents.setText("검색하신 단어가 포함된 내용이 없습니다.");
